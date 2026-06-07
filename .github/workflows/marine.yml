@@ -4,7 +4,8 @@ name: marine-alert
 on:
   workflow_dispatch:          # κουμπί "Run workflow" για χειροκίνητη δοκιμή
   schedule:
-    - cron: "5 4,10,16,22 * * *"   # ώρες UTC (≈ ώρες εκπομπής NAVTEX). Άλλαξέ τες αν θες.
+    # Εκδόσεις ΕΜΥ METAREA III: 0600/1000/1600/2200 UTC -> στέλνουμε 10' μετά.
+    - cron: "10 6,10,16,22 * * *"
 
 # Χρειάζεται για να γράφει πίσω το state.json (de-dup)
 permissions:
