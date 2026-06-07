@@ -1,0 +1,43 @@
+name: marine-alert
+
+# Ο ΔΩΡΕΑΝ "server": το GitHub τρέχει το script μόνο του.
+on:
+  workflow_dispatch:          # κουμπί "Run workflow" για χειροκίνητη δοκιμή
+  schedule:
+    - cron: "5 4,10,16,22 * * *"   # ώρες UTC (≈ ώρες εκπομπής NAVTEX). Άλλαξέ τες αν θες.
+
+# Χρειάζεται για να γράφει πίσω το state.json (de-dup)
+permissions:
+  contents: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run
+        env:
+          SENDER: "twilio"
+          TWILIO_SID:   ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          TWILIO_FROM:  "whatsapp:+14155238886"   # ο αριθμός του Twilio sandbox
+          TWILIO_TO:    ${{ secrets.TWILIO_TO }}   # π.χ. whatsapp:+3069XXXXXXXX
+          LAT: "40.55"
+          LON: "22.95"
+          INCLUDE_WEST: "0"
+        run: python marine_alert.py --source bulletin
+
+      - name: Save state (de-dup)
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name  "marine-bot"
+            git config user.email "marine-bot@users.noreply.github.com"
+            git add state.json
+            git commit -m "update state"
+            git push
+          fi
