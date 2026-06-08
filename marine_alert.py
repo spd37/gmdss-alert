@@ -59,6 +59,7 @@ INCLUDE_WEST = os.environ.get("INCLUDE_WEST", "0") == "1"
 STATE_FILE   = os.environ.get("STATE_FILE", "state.json")
 
 BULLETINSET_URL = "https://wwmiws.wmo.int/index.php/metareas/bulletinset/3/html"
+EMY_URL = "http://oldportal.emy.gr/emy/el/navigation/naftilia_deltio_thalasson_ektiposi"
 MAX_CHARS  = 1400            # ασφαλές όριο ανά μήνυμα WhatsApp
 USER_AGENT = "Mozilla/5.0 (marine-alert; captains association)"
 
@@ -151,6 +152,49 @@ def parse_bulletinset(text: str):
         bulletins.append((title, header, body))
         pre = parts[idx + 1] if idx + 1 < len(parts) else ""
     return bulletins
+
+
+# ---- ΕΜΥ (ελληνικό δελτίο METAREA 3) ----
+GR_UP = r"[\u0386\u0388-\u038A\u038C\u038E\u038F\u0391-\u03A9\u03AA\u03AB ]"
+
+
+def _is_area_gr(s: str) -> bool:
+    s = s.strip()
+    if len(s) < 3:
+        return False
+    if not re.fullmatch(GR_UP + "{3,}", s):
+        return False
+    return len(s.split()) <= 4
+
+
+def _format_body_gr(body: str) -> str:
+    lines = [l.strip() for l in body.splitlines() if l.strip()]
+    out, in_fc = [], False
+    for i, s in enumerate(lines):
+        if "ΜΕΡΟΣ 3" in s or "ΠΡΟΓΝΩΣΗ ΜΕΧΡΙ" in s:
+            in_fc = True
+        if "ΠΡΟΟΠΤΙΚΗ" in s:
+            in_fc = False
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if in_fc and _is_area_gr(s) and (any(c.isdigit() for c in nxt) or "." in nxt):
+            out.append("*" + s + "*")
+        else:
+            out.append(s)
+    return "\n".join(out)
+
+
+def get_emy_bulletin() -> str:
+    text = _strip_html(http_get(EMY_URL))
+    i = text.find("ΔΕΛΤΙΟ ΚΑΙΡΟΥ ΓΙΑ ΤΗ METAREA")
+    if i < 0:
+        return "(ΕΜΥ: δεν βρέθηκε το δελτίο στη σελίδα)"
+    out = []
+    for line in text[i:].splitlines():
+        if re.search(r"[a-z\u03ac-\u03ce]", line):   # πεζά = αρχή footer/links -> σταμάτα
+            break
+        out.append(line)
+    body = "\n".join(out).strip()[:4000]
+    return "*== ΔΕΛΤΙΟ METAREA III · ΕΜΥ ==*\n" + _format_body_gr(body)
 
 
 def get_metarea_bulletin() -> str:
@@ -267,6 +311,8 @@ def already_sent(text: str) -> bool:
 
 def build_message(source: str) -> str:
     parts = []
+    if source in ("emy", "all"):
+        parts.append(get_emy_bulletin())
     if source in ("bulletin", "all"):
         parts.append(get_metarea_bulletin())
     if source in ("weather", "all"):
@@ -289,7 +335,7 @@ def selftest():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", default="bulletin", choices=["bulletin", "weather", "all"])
+    ap.add_argument("--source", default="emy", choices=["emy", "bulletin", "weather", "all"])
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--no-dedup", action="store_true")
