@@ -4,8 +4,7 @@ name: marine-alert
 on:
   workflow_dispatch:          # κουμπί "Run workflow" για χειροκίνητη δοκιμή
   schedule:
-    # Εκδόσεις ΕΜΥ METAREA III: 0600/1000/1600/2200 UTC -> στέλνουμε 10' μετά.
-    - cron: "10 6,10,16,22 * * *"
+    - cron: "*/30 * * * *"   # poll κάθε 30 λεπτά· στέλνει ΜΟΝΟ όταν αλλάξει το δελτίο
 
 # Χρειάζεται για να γράφει πίσω το state.json (de-dup)
 permissions:
@@ -31,7 +30,7 @@ jobs:
           LAT: "40.55"
           LON: "22.95"
           INCLUDE_WEST: "0"
-        run: python marine_alert.py --source bulletin
+        run: python marine_alert.py --source emy
 
       - name: Save state (de-dup)
         run: |
